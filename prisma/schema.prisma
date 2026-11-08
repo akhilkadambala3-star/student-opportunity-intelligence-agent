@@ -1,0 +1,446 @@
+// Prisma Schema for Opportunity Intelligence Agent
+// Devlympics 2026 | NSUT | Theme: Bridge the Gap
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String
+  name         String
+  role         String         @default("STUDENT") // STUDENT, ADMIN, DEMO
+  isDemo       Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  session      Session[]
+  profile      StudentProfile?
+  documents    Document[]
+  investigations Investigation[]
+  preparationPlans PreparationPlan[]
+  practiceSessions PracticeSession[]
+  applications Application[]
+  notifications Notification[]
+  preference   UserPreference?
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model StudentProfile {
+  id                 String      @id @default(cuid())
+  userId             String      @unique
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName        String?
+  institution        String?     // e.g. NSUT Delhi
+  degree             String?     // e.g. B.Tech
+  branch             String?     // e.g. Computer Science & Engineering
+  currentSemester    Int?        // e.g. 6
+  graduationYear     Int?        // e.g. 2026
+  cgpa               Float?      // e.g. 8.65
+  location           String?     // e.g. New Delhi, India
+  preferredLocations String?     // JSON string array e.g. ["New Delhi", "Bengaluru", "Remote"]
+  workPreference     String      @default("ANY") // REMOTE, HYBRID, ONSITE, ANY
+  targetRoles        String?     // JSON string array e.g. ["Software Engineer", "Full Stack Developer"]
+  targetIndustries   String?     // JSON string array e.g. ["FinTech", "AI/ML", "EdTech"]
+  targetOpportunities String?    // JSON string array e.g. ["INTERNSHIP", "FULL_TIME", "FELLOWSHIP"]
+  minStipend         Int?        // in INR or USD
+  availabilityStart  DateTime?
+  timeCommitment     String?     // e.g. "Full-time (40 hrs/wk)" or "Part-time (20 hrs/wk)"
+  bio                String?
+  headline           String?
+  profileCompletion  Int         @default(30) // percentage 0-100
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  skills             UserSkill[]
+  projects           Project[]
+  experiences        Experience[]
+}
+
+model Skill {
+  id           String      @id @default(cuid())
+  name         String      @unique
+  category     String      // e.g. "Programming Languages", "Web Development", "AI/ML", "Databases"
+  userSkills   UserSkill[]
+
+  @@index([name])
+}
+
+model UserSkill {
+  id                 String         @id @default(cuid())
+  profileId          String
+  profile            StudentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skillId            String
+  skill              Skill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  proficiencyLevel   String         @default("INTERMEDIATE") // BEGINNER, INTERMEDIATE, ADVANCED, EXPERT
+  isVerified         Boolean        @default(false)
+  verificationSource String?        // e.g. "GitHub Project: CodeSync", "HackerRank Gold", "Self-Reported"
+  evidenceNotes      String?        // Detailed proof link or explanation
+  projectsRelated    String?        // JSON string array of project IDs or names
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@unique([profileId, skillId])
+  @@index([profileId])
+}
+
+model Project {
+  id                   String         @id @default(cuid())
+  profileId            String
+  profile              StudentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title                String
+  description          String
+  problemSolved        String?
+  technologies         String         // JSON string array e.g. ["React", "TypeScript", "Prisma", "Next.js"]
+  personalContribution String?
+  githubUrl            String?
+  liveUrl              String?
+  evidenceNotes        String?
+  startDate            DateTime?
+  endDate              DateTime?
+  isOngoing            Boolean        @default(false)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([profileId])
+}
+
+model Experience {
+  id             String         @id @default(cuid())
+  profileId      String
+  profile        StudentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title          String
+  organisation   String
+  experienceType String         @default("INTERNSHIP") // INTERNSHIP, FULL_TIME, VOLUNTEERING, RESEARCH, LEADERSHIP
+  description    String
+  technologies   String?        // JSON string array
+  evidenceNotes  String?
+  startDate      DateTime?
+  endDate        DateTime?
+  isCurrent      Boolean        @default(false)
+  location       String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([profileId])
+}
+
+model Document {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title             String
+  fileName          String
+  filePath          String
+  fileType          String   @default("RESUME") // RESUME, TRANSCRIPT, CERTIFICATE, PORTFOLIO, OTHER
+  fileSize          Int
+  mimeType          String
+  extractedText     String?
+  isConfirmed       Boolean  @default(false) // Requires user confirmation before updating profile!
+  extractedDataJson String?  // Structured parsed candidate info waiting for confirmation
+  uploadedAt        DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Opportunity {
+  id                      String   @id @default(cuid())
+  title                   String
+  organisation            String
+  organisationLogo        String?
+  category                String   @default("INTERNSHIP") // INTERNSHIP, FULL_TIME, PART_TIME, SCHOLARSHIP, FELLOWSHIP, HACKATHON, RESEARCH
+  roleDescription         String
+  originalUrl             String
+  officialOrgUrl          String?
+  sourceType              String   @default("OFFICIAL_CAREER_PORTAL") // OFFICIAL_CAREER_PORTAL, GOVT_PORTAL, PLATFORM, CANDIDATE_REPORTED
+  sourceVerificationStatus String  @default("OFFICIAL_VERIFIED") // OFFICIAL_VERIFIED, DETAILS_CHECKED, THIRD_PARTY_REPORT, UNVERIFIED, POTENTIALLY_OUTDATED
+  location                String   // e.g. "Bengaluru, India" or "Remote"
+  workArrangement         String   @default("HYBRID") // REMOTE, HYBRID, ONSITE
+  requiredEducation       String?  // e.g. "B.Tech/B.E. in CS/IT or related field"
+  eligibleGradYears       String?  // JSON string array e.g. ["2026", "2027"]
+  requiredSkills          String   // JSON string array e.g. ["TypeScript", "Next.js", "SQL"]
+  preferredSkills         String?  // JSON string array e.g. ["Docker", "GraphQL", "AWS"]
+  minCgpa                 Float?   // e.g. 7.5 or null if unspecified
+  experienceYears         Float?   // e.g. 0 for entry level/intern
+  stipendOrComp           String?  // e.g. "₹45,000 / month" or "$3,000 / month" or null if unstated
+  duration                String?  // e.g. "6 Months"
+  startDate               String?  // e.g. "January 2027" or null
+  applicationDeadline     DateTime?
+  requiredDocuments       String?  // JSON string array e.g. ["Resume", "College ID", "Official Transcript"]
+  applicationInstructions String?
+  status                  String   @default("ACTIVE") // ACTIVE, EXPIRED, UPCOMING
+  isDemo                  Boolean  @default(false)
+  confidenceNotes         String?  // Explanation of data provenance & any missing info
+  lastCheckedAt           DateTime @default(now())
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  sources                 OpportunitySource[]
+  requirements            OpportunityRequirement[]
+  investigations          Investigation[]
+  preparationPlans        PreparationPlan[]
+  practiceSessions        PracticeSession[]
+  applications            Application[]
+
+  @@index([category])
+  @@index([status])
+  @@index([applicationDeadline])
+}
+
+model OpportunitySource {
+  id               String      @id @default(cuid())
+  opportunityId    String
+  opportunity      Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  sourceName       String      // e.g. "Google Careers Official Portal"
+  sourceUrl        String
+  sourceType       String      // OFFICIAL_CAREER_PAGE, GOVT_PORTAL, PLATFORM, CANDIDATE_FORUM
+  trustLevel       String      // OFFICIAL_VERIFIED, DETAILS_CHECKED, THIRD_PARTY, UNVERIFIED
+  retrievedAt      DateTime    @default(now())
+  extractedSnippet String?     // Raw source snippet supporting requirements
+  isAvailable      Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+
+  @@index([opportunityId])
+}
+
+model OpportunityRequirement {
+  id             String      @id @default(cuid())
+  opportunityId  String
+  opportunity    Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  requirementText String
+  category       String      @default("SKILL") // EDUCATION, SKILL, EXPERIENCE, CGPA, DOCUMENT, CITIZENSHIP, LOCATION, OTHER
+  isMandatory    Boolean     @default(true) // Hard requirement vs Preferred
+  sourceSnippet  String?     // Exact citation from official source
+  createdAt      DateTime    @default(now())
+
+  @@index([opportunityId])
+}
+
+model Investigation {
+  id                          String   @id @default(cuid())
+  userId                      String
+  user                        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId               String
+  opportunity                 Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  status                      String   @default("COMPLETED") // COMPLETED, IN_PROGRESS, FAILED
+  overallEligibility          String   // CONFIRMED_ELIGIBLE, APPEARS_ELIGIBLE, POTENTIALLY_ELIGIBLE, LIKELY_INELIGIBLE, INSUFFICIENT_INFORMATION
+  hardRequirementsMet         Int      @default(0)
+  totalMandatoryRequirements  Int      @default(0)
+  suitabilityScore            Int      @default(0) // 0-100 soft match score
+  summary                     String
+  gapAnalysis                 String
+  riskFactors                 String?  // JSON string array
+  recommendations             String?  // JSON string array
+  providerDecisionDisclaimer  String   @default("The official organisation makes the final admission and selection decision. This analysis represents evidence-backed guidance.")
+  lastRunAt                   DateTime @default(now())
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  findings                    InvestigationFinding[]
+
+  @@unique([userId, opportunityId])
+  @@index([userId])
+  @@index([opportunityId])
+}
+
+model InvestigationFinding {
+  id                 String        @id @default(cuid())
+  investigationId    String
+  investigation      Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+  requirementText    String
+  isMandatory        Boolean       @default(true)
+  evaluationStatus   String        // SATISFIED, NOT_SATISFIED, NEEDS_CONFIRMATION, NO_EVIDENCE_FOUND, AMBIGUOUS_SOURCE
+  evidenceFound      String?       // Exact profile item or document text cited
+  sourceSnippet      String?       // Exact opportunity listing citation
+  explanation        String
+  recommendedAction  String?
+  createdAt          DateTime      @default(now())
+
+  @@index([investigationId])
+}
+
+model PreparationPlan {
+  id                   String            @id @default(cuid())
+  userId               String
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId        String
+  opportunity          Opportunity       @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  title                String
+  targetCompletionDate DateTime?
+  estimatedHours       Int               @default(20)
+  overallReadiness     Int               @default(0) // 0-100 percentage
+  sequenceOrderJson    String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  tasks                PreparationTask[]
+  resources            PreparationResource[]
+
+  @@unique([userId, opportunityId])
+  @@index([userId])
+  @@index([opportunityId])
+}
+
+model PreparationTask {
+  id               String          @id @default(cuid())
+  planId           String
+  plan             PreparationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  title            String
+  category         String          // SCREENING, CODING, TECHNICAL_ROUND, SYSTEM_DESIGN, HR_BEHAVIORAL, PROJECT_DEFENSE, ESSAY, DOCUMENT_PREP
+  description      String
+  evidenceBasis    String          @default("OFFICIAL_STAGE") // OFFICIAL_STAGE, CANDIDATE_REPORTED, AI_INFERRED
+  priority         String          @default("HIGH") // HIGH, MEDIUM, LOW
+  estimatedMinutes Int             @default(60)
+  isCompleted      Boolean         @default(false)
+  completedAt      DateTime?
+  resourceUrl      String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([planId])
+}
+
+model PreparationResource {
+  id            String          @id @default(cuid())
+  planId        String
+  plan          PreparationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  title         String
+  resourceType  String          // ARTICLE, DOCUMENTATION, PRACTICE_SET, VIDEO, INTERVIEW_EXPERIENCE
+  url           String
+  summary       String
+  isOfficial    Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+
+  @@index([planId])
+}
+
+model PracticeSession {
+  id                 String      @id @default(cuid())
+  userId             String
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId      String?
+  opportunity        Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  topic              String      // e.g. "Data Structures: Trees & Graphs", "Next.js Server Components"
+  question           String
+  questionType       String      @default("TECHNICAL") // TECHNICAL, APTITUDE, BEHAVIORAL, PROJECT_EXPLANATION
+  expectedKeyPoints  String      // JSON string array
+  studentAnswer      String?
+  aiFeedback         String?
+  strengths          String?     // JSON string array
+  improvements       String?     // JSON string array
+  scoreEstimate      Int?        // 0-100
+  createdAt          DateTime    @default(now())
+
+  @@index([userId])
+  @@index([opportunityId])
+}
+
+model Application {
+  id                 String                   @id @default(cuid())
+  userId             String
+  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId      String
+  opportunity        Opportunity              @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  currentStatus      String                   @default("SAVED") // INTERESTED, SAVED, PREPARING, APPLIED, ASSESSMENT_SCHEDULED, INTERVIEW_SCHEDULED, AWAITING_RESULT, OFFER_RECEIVED, REJECTED, WITHDRAWN, CLOSED_EXPIRED
+  appliedDate        DateTime?
+  deadline           DateTime?
+  targetRole         String
+  organisation       String
+  notes              String?
+  submittedResumeUrl String?
+  assessmentDate     DateTime?
+  interviewDate      DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  statusHistory      ApplicationStatusHistory[]
+  tasks              ApplicationTask[]
+  feedback           ApplicationFeedback?
+
+  @@unique([userId, opportunityId])
+  @@index([userId])
+  @@index([currentStatus])
+}
+
+model ApplicationStatusHistory {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStatus    String?
+  toStatus      String
+  changedAt     DateTime    @default(now())
+  note          String?
+
+  @@index([applicationId])
+}
+
+model ApplicationTask {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  title         String
+  dueDate       DateTime?
+  isCompleted   Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+
+  @@index([applicationId])
+}
+
+model ApplicationFeedback {
+  id                    String      @id @default(cuid())
+  applicationId         String      @unique
+  application           Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  outcome               String      // OFFER, REJECTED, WAITLISTED, WITHDRAWN, NO_RESPONSE
+  feedbackReceived      Boolean     @default(false)
+  feedbackSource        String?     // EMPLOYER_EMAIL, PORTAL_MESSAGE, INTERVIEWER_NOTES, NONE
+  feedbackText          String?
+  statedImprovementAreas String?    // JSON string array
+  isEvidenceBacked      Boolean     @default(false) // True only when official/interviewer notes exist
+  recordedAt            DateTime    @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("STATUS_CHANGE") // DEADLINE_ALERT, STATUS_CHANGE, INVESTIGATION_READY, PREPARATION_REMINDER
+  isRead    Boolean  @default(false)
+  linkUrl   String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model UserPreference {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailNotifications Boolean  @default(true)
+  deadlineAlertDays  Int      @default(3)
+  demoModeActive     Boolean  @default(true)
+  theme              String   @default("system")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
